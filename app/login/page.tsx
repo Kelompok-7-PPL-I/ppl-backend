@@ -19,14 +19,33 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // 1. Proses cek email & password ke sistem Supabase Auth
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
     
-    if (error) {
-      setError(error.message);
+    if (authError) {
+      setError(authError.message);
       setLoading(false);
     } else {
-      // GANTI DARI '/' KE '/dashboard'
-      router.push('/dashboard');
+      // 2. CEK ROLE: Tarik data role dari tabel 'users' berdasarkan email
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('role')
+        .eq('email', email)
+        .single();
+
+      if (userError) {
+        console.error("Gagal ambil role:", userError);
+        // Fallback: Kalau gagal ngecek role, lempar ke dashboard biasa
+        router.push('/dashboard');
+      } else {
+        // 3. PEMISAHAN JALUR: Admin ke /admin, selain itu ke /dashboard
+        if (userData?.role === 'admin') {
+          router.push('/admin');
+        } else {
+          router.push('/dashboard');
+        }
+      }
+      
       // Refresh perlu supaya server component sadar kalau session sudah ada
       router.refresh();
     }
@@ -36,7 +55,7 @@ export default function LoginPage() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { 
-        // Arahkan callback ke dashboard juga setelah sukses
+        // Catatan: Kalau login pakai Google, sementara arahnya tetap ke dashboard
         redirectTo: `${window.location.origin}/auth/callback?next=/dashboard` 
       },
     });
